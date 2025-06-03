@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Threat Detection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div class="bg-white shadow-lg rounded-lg p-6 w-full max-w-lg">
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">Real-time Threat Detection</h1>
+
+        <div class="flex gap-2 mb-4">
+            <button id="startRecording" class="px-4 py-2 bg-green-500 text-white rounded-lg shadow hover:bg-green-600 transition disabled:opacity-50" disabled>Start Listening</button>
+            <button id="stopRecording" class="px-4 py-2 bg-red-500 text-white rounded-lg shadow hover:bg-red-600 transition disabled:opacity-50" disabled>Stop Listening</button>
+        </div>
+
+        <div id="recordingStatus" class="hidden mb-4">
+            <div class="flex items-center gap-2">
+                <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                <span class="text-red-500 font-medium">Listening in progress...</span>
+            </div>
+        </div>
+
+        <div id="transcriptionContainer" class="mt-4">
+            <h2 class="text-lg font-semibold text-gray-700 mb-2">Live Transcription:</h2>
+            <div id="transcription" class="bg-gray-50 p-4 rounded-lg mb-4 min-h-[100px] max-h-[200px] overflow-y-auto"></div>
+            
+            <h2 class="text-lg font-semibold text-gray-700 mb-2">Threat Analysis:</h2>
+            <div id="threatAnalysis" class="bg-gray-50 p-4 rounded-lg">
+                <p class="text-gray-600">No threats detected yet.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const startBtn = document.getElementById('startRecording');
+        const stopBtn = document.getElementById('stopRecording');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const transcription = document.getElementById('transcription');
+        const threatAnalysis = document.getElementById('threatAnalysis');
+
+        let mediaRecorder;
+        let audioContext;
+        let eventSource;
+        let isRecording = false;
+
+        // Request microphone access
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            startBtn.disabled = false;
+            audioContext = new AudioContext();
+            const source = audioContext.createMediaStreamSource(stream);
+            const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+            source.connect(processor);
+            processor.connect(audioContext.destination);
+
+            processor.onaudioprocess = (e) => {
+                if (isRecording) {
+                    const audioData = e.inputBuffer.getChannelData(0);
+                    console.log('Sending audio chunk of length:', audioData.length);
+                    sendAudioChunk(audioData);
+                }
+            };
+        });
+
+        async function sendAudioChunk(audioData) {
+            try {
+                const blob = new Blob([audioData], { type: 'audio/wav' });
+                const formData = new FormData();
+                formData.append('audio', blob);
+                console.log('Posting audio chunk to /api/stream/');
+                const response = await fetch('/api/stream/', {
+                    method: 'POST',
+                    body: formData
+                });
+                console.log('Response from /api/stream/:', response.status);
+            } catch (error) {
+                console.error('Error sending audio chunk:', error);
+            }
+        }
+
+        function startListening() {
+            isRecording = true;
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            recordingStatus.classList.remove('hidden');
+            transcription.textContent = '';
+            threatAnalysis.innerHTML = '<p class="text-gray-600">No threats detected yet.</p>';
+
+            console.log('Opening SSE connection to /api/start/');
+            eventSource = new EventSource('/api/start/');
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log('Received SSE message:', data);
+                
+                // Update transcription
+                if (data.text) {
+                    transcription.textContent += data.text + ' ';
+                    transcription.scrollTop = transcription.scrollHeight;
+                }
+
+                // Update threat analysis
+                if (data.is_threat) {
+                    const threatWords = data.threat_words.join(', ');
+                    threatAnalysis.innerHTML = `
+                        <p class="text-red-600 font-semibold">
+                            ⚠️ Threat Detected!
+                        </p>
+                        <p class="text-gray-600 mt-2">
+                            Detected threat words: ${threatWords}
+                        </p>
+                    `;
+                    // Play beep sound when threat is detected
+                    console.log('Threat detected, attempting to play beep sound...');
+                    const beepSound = new Audio('/static/beep.mp3');
+                    
+                    beepSound.oncanplaythrough = () => {
+                        console.log('Beep sound loaded successfully');
+                        beepSound.play()
+                            .then(() => console.log('Beep sound played successfully'))
+                            .catch(error => console.error('Error playing beep sound:', error));
+                    };
+
+                    beepSound.onerror = (error) => {
+                        console.error('Error loading beep sound:', error);
+                    };
+                }
+            };
+
+            eventSource.onerror = (error) => {
+                console.error('SSE Error:', error);
+                stopListening();
+            };
+        }
+
+        async function stopListening() {
+            isRecording = false;
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            recordingStatus.classList.add('hidden');
+
+            // Wait a bit before closing the event source to allow last transcription to arrive
+            setTimeout(() => {
+                if (eventSource) {
+                    eventSource.close();
+                }
+            }, 1000); // 1 second delay
+
+            console.log('Stopping listening, closing SSE and sending /api/stop/');
+
+            try {
+                await fetch('/api/stop/');
+            } catch (error) {
+                console.error('Error stopping:', error);
+            }
+        }
+
+        startBtn.addEventListener('click', startListening);
+        stopBtn.addEventListener('click', stopListening);
+    </script>
+</body>
+</html>

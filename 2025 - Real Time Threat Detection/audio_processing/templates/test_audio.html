@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beep Sound Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+    </style>
+</head>
+<body>
+    <h1>Beep Sound Test</h1>
+    <button onclick="testBeep()">Test Beep Sound</button>
+    <div id="status"></div>
+
+    <script>
+        function testBeep() {
+            const status = document.getElementById('status');
+            status.textContent = 'Loading beep sound...';
+            status.className = '';
+
+            console.log('Attempting to load beep sound...');
+            const beepSound = new Audio('/static/beep.mp3');
+            
+            beepSound.oncanplaythrough = () => {
+                console.log('Beep sound loaded successfully');
+                status.textContent = 'Beep sound loaded successfully. Playing...';
+                status.className = 'success';
+                
+                beepSound.play()
+                    .then(() => {
+                        console.log('Beep sound played successfully');
+                        status.textContent = 'Beep sound played successfully!';
+                    })
+                    .catch(error => {
+                        console.error('Error playing beep sound:', error);
+                        status.textContent = 'Error playing beep sound: ' + error.message;
+                        status.className = 'error';
+                    });
+            };
+
+            beepSound.onerror = (error) => {
+                console.error('Error loading beep sound:', error);
+                status.textContent = 'Error loading beep sound. Check console for details.';
+                status.className = 'error';
+            };
+        }
+    </script>
+</body>
+</html> 
