@@ -5,6 +5,7 @@ Project Title: Real Time Threat Detection for Deaf and Blind
 * Alok Kumar Verma - 21103010
 * Tanish Sharma - 21103151
 
+gitHub repo : - https://github.com/alokkv2502/Threat-detection-backend
 
 ---
 REAL-TIME THREAT DETECTION SYSTEM USER GUIDE
